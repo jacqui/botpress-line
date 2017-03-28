@@ -114,7 +114,8 @@ module.exports = {
       }
 
       line.parse(req.body)
-      return res.json({})
+      
+      return res.sendStatus(200)
     })
   }
 }
