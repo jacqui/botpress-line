@@ -45,9 +45,9 @@ const parser = bodyParser.json({
 module.exports = {
 
   config: {
-    channelID: { type: 'string', required: true, default: '', env: 'CHANNEL_ID' },
-    channelSecret: { type: 'string', required: true, default: '', env: 'CHANNEL_SECRET' },
-    channelAccessToken: { type: 'string', required: true, default: '', env: 'CHANNEL_ACCESS_TOKEN' }
+    channelID: { type: 'string', required: true, default: '', env: 'LINE_CHANNEL_ID' },
+    channelSecret: { type: 'string', required: true, default: '', env: 'LINE_CHANNEL_SECRET' },
+    channelAccessToken: { type: 'string', required: true, default: '', env: 'LINE_CHANNEL_ACCESS_TOKEN' }
   },
 
   init: async function(bp) {
@@ -69,23 +69,28 @@ module.exports = {
   },
 
   ready: async function(bp, configurator) {
-    // Your module's been loaded by Botpress.
-    // Serve your APIs here, execute logic, etc.
-
     const config = await configurator.loadAll()
     
     initializeLine(bp, config)
     incoming(bp, line)
 
-    var router = bp.getRouter('botpress-line', { auth: false })
-      
-    router.post('/webhook', parser, (req, res) => {
-      console.log("webhook requested", req.body)
-      if (!line.verify(req.rawBody, req.get('X-Line-Signature'))) {
-        return res.sendStatus(400);
+    var router = bp.getRouter('botpress-line', {
+      'bodyParser.json': false,
+      auth: req => !/\/webhook/i.test(req.originalUrl)
+    })
+    
+    router.use(bodyParser.json({
+      verify: (req, res, buf, encoding) => {
+        req.rawBody = buf.toString(encoding)
       }
-      line.parse(req.body);
-      console.log("webhook requested", req.body)
+    }))
+
+    router.post('/webhook', parser, (req, res) => {
+      if (!line.verify(req.rawBody, req.get('X-Line-Signature'))) {
+        return res.sendStatus(400)
+      }
+
+      line.parse(req.body)
       return res.json({})
     })
   }
