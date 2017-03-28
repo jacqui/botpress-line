@@ -8,12 +8,16 @@ var nodeConfig = {
   output: {
     path: './bin',
     filename: 'node.bundle.js',
-    libraryTarget: 'commonjs2'
+    libraryTarget: 'commonjs2',
+    publicPath: __dirname
   },
   externals: [nodeExternals(), 'botpress'],
   target: 'node',
   resolve: {
     extensions: ['', '.js']
+  },
+  node: {
+    __dirname: false
   },
   module: {
     loaders: [{

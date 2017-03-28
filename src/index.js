@@ -1,9 +1,11 @@
-const linebot = require('linebot');
+const linebot = require('linebot')
 const actions = require('./actions')
 const outgoing = require('./outgoing')
 const incoming = require('./incoming')
 const bodyParser = require('body-parser')
 const checkVersion = require('botpress-version-manager')
+const _ = require('lodash')
+const Promise = require('bluebird')
 
 let line = null
 const outgoingPending = outgoing.pending
@@ -28,29 +30,26 @@ const outgoingMiddleware = (event, next) => {
   .then(setValue('resolve'), setValue('reject'))
 }
 
-const initializeLine = (bp, configurator) => {
-  return configurator.loadAll()
-  .then(config => {
-    line = linebot({
-      channelId: config.channelId,
-      channelSecret: config.channelSecret,
-      channelAccessToken: config.channelAccessToken
-    });
+const initializeLine = (bp, config) => {
+  line = linebot({
+    channelId: config.channelId,
+    channelSecret: config.channelSecret,
+    channelAccessToken: config.channelAccessToken
   })
 }
 
 const parser = bodyParser.json({
 	verify: function (req, res, buf, encoding) {
-		req.rawBody = buf.toString(encoding);
+		req.rawBody = buf.toString(encoding)
 	}
-});
+})
 
 module.exports = {
 
   config: {
-    channelID: { type: 'string', required: true, default: '', env: 'CHANNEL_ID' },
-    channelSecret: { type: 'string', required: true, default: '', env: 'CHANNEL_SECRET' },
-    channelAccessToken: { type: 'string', required: true, default: '', env: 'CHANNEL_ACCESS_TOKEN' }
+    channelID: { type: 'string', required: true, default: '', env: 'LINE_CHANNEL_ID' },
+    channelSecret: { type: 'string', required: true, default: '', env: 'LINE_CHANNEL_SECRET' },
+    channelAccessToken: { type: 'string', required: true, default: '', env: 'LINE_CHANNEL_ACCESS_TOKEN' }
   },
 
   init: async function(bp) {
@@ -69,29 +68,55 @@ module.exports = {
     })
 
     bp.line = {}
+    _.forIn(actions, (action, name) => {
+      bp.line[name] = action
+
+      var sendName = name.replace(/^create/, 'send')
+      bp.line[sendName] = Promise.method(function() {
+        var msg = action.apply(this, arguments)
+        msg.__id = new Date().toISOString() + Math.random()
+        const resolver = { event: msg }
+        
+        const promise = new Promise(function(resolve, reject) {
+          resolver.resolve = resolve
+          resolver.reject = reject
+        })
+        
+        outgoingPending[msg.__id] = resolver
+        
+        bp.middlewares.sendOutgoing(msg)
+        return promise
+      })
+    })
+
   },
 
   ready: async function(bp, configurator) {
-    // Your module's been loaded by Botpress.
-    // Serve your APIs here, execute logic, etc.
-
     const config = await configurator.loadAll()
     
     initializeLine(bp, config)
-    .then(() => {
-      incoming(bp, line)
+    incoming(bp, line)
 
-      var router = bp.getRouter('botpress-line', { auth: false })
-      router.post('/webhook', parser, (req, res) => {
-        console.log("webhook requested", req.body)
-        if (!line.verify(req.rawBody, req.get('X-Line-Signature'))) {
-          return res.sendStatus(400);
-        }
-        line.parse(req.body);
-        console.log("webhook requested", req.body)
-        return res.json({});
+    var router = bp.getRouter('botpress-line', {
+      'bodyParser.json': false,
+      auth: req => !/\/webhook/i.test(req.originalUrl)
+    })
+    
+    router.use(bodyParser.json({
+      verify: (req, res, buf, encoding) => {
+        req.rawBody = buf.toString(encoding)
       }
-    }
+    }))
+
+    router.post('/webhook', parser, (req, res) => {
+      if (!line.verify(req.rawBody, req.get('X-Line-Signature'))) {
+        return res.sendStatus(400)
+      }
+
+      line.parse(req.body)
+      
+      return res.sendStatus(200)
+    })
   }
 }
 

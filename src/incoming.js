@@ -15,8 +15,11 @@ module.exports = (bp, line) => {
   })
 
   const preprocessEvent = payload => {
+    // TODO: Support source=group and source=room
+    // https://devdocs.line.me/en/#webhook-event-object
+
     const userId = payload.source.userId
-    const mid = payload.message && payload.message.messageId
+    const mid = payload.message && payload.message.id
 
     if (mid && !messagesCache.has(mid)) {
       // We already processed this message
@@ -32,14 +35,30 @@ module.exports = (bp, line) => {
   line.on('message', e => {
     preprocessEvent(e)
     .then(profile => {
-      // push the message to the incoming middleware
-      bp.middlewares.sendIncoming({
-        platform: 'line',
-        type: 'message',
-        user: profile,
-        text: e.message.text,
-        raw: e
-      })
+      // TODO Support: Image, Video, Audio, Location
+      // https://devdocs.line.me/en/#webhook-event-object
+      
+      switch (e.message.type) {
+        case 'text':
+          bp.middlewares.sendIncoming({
+            platform: 'line',
+            type: 'text',
+            user: profile,
+            text: e.message.text,
+            raw: e
+          })
+          break
+
+        case 'sticker':
+          bp.middlewares.sendIncoming({
+            platform: 'line',
+            type: 'sticker',
+            user: profile,
+            text: e.message.packageId + '/' + e.message.stickerId,
+            raw: e
+          })
+          break
+      }
     })
   })
 
