@@ -28,14 +28,11 @@ const outgoingMiddleware = (event, next) => {
   .then(setValue('resolve'), setValue('reject'))
 }
 
-const initializeLine = (bp, configurator) => {
-  return configurator.loadAll()
-  .then(config => {
-    line = linebot({
-      channelId: config.channelId,
-      channelSecret: config.channelSecret,
-      channelAccessToken: config.channelAccessToken
-    });
+const initializeLine = (bp, config) => {
+  line = linebot({
+    channelId: config.channelId,
+    channelSecret: config.channelSecret,
+    channelAccessToken: config.channelAccessToken
   })
 }
 
@@ -78,20 +75,19 @@ module.exports = {
     const config = await configurator.loadAll()
     
     initializeLine(bp, config)
-    .then(() => {
-      incoming(bp, line)
+    incoming(bp, line)
 
-      var router = bp.getRouter('botpress-line', { auth: false })
-      router.post('/webhook', parser, (req, res) => {
-        console.log("webhook requested", req.body)
-        if (!line.verify(req.rawBody, req.get('X-Line-Signature'))) {
-          return res.sendStatus(400);
-        }
-        line.parse(req.body);
-        console.log("webhook requested", req.body)
-        return res.json({});
+    var router = bp.getRouter('botpress-line', { auth: false })
+      
+    router.post('/webhook', parser, (req, res) => {
+      console.log("webhook requested", req.body)
+      if (!line.verify(req.rawBody, req.get('X-Line-Signature'))) {
+        return res.sendStatus(400);
       }
-    }
+      line.parse(req.body);
+      console.log("webhook requested", req.body)
+      return res.json({})
+    })
   }
 }
 
