@@ -9,9 +9,7 @@ const handlePromise = (next, promise) => {
   })
 }
 const handleText = (event, next, line) => {
-  return handlePromise(next, event.reply(
-    'Hello there!'
-  ))
+  return handlePromise(next, line[event.raw.method](event.raw.to, event.text))
 }
 
 module.exports = {

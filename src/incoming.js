@@ -15,6 +15,8 @@ module.exports = (bp, line) => {
   })
 
   const preprocessEvent = payload => {
+    // TODO: Support source=group and source=room
+    // https://devdocs.line.me/en/#webhook-event-object
 
     const userId = payload.source.userId
     const mid = payload.message && payload.message.id
@@ -33,7 +35,9 @@ module.exports = (bp, line) => {
   line.on('message', e => {
     preprocessEvent(e)
     .then(profile => {
-      // push the message to the incoming middleware
+      // TODO Support: Image, Video, Audio, Location
+      // https://devdocs.line.me/en/#webhook-event-object
+      
       switch (e.message.type) {
         case 'text':
           bp.middlewares.sendIncoming({

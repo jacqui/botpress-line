@@ -1,9 +1,11 @@
-const linebot = require('linebot');
+const linebot = require('linebot')
 const actions = require('./actions')
 const outgoing = require('./outgoing')
 const incoming = require('./incoming')
 const bodyParser = require('body-parser')
 const checkVersion = require('botpress-version-manager')
+const _ = require('lodash')
+const Promise = require('bluebird')
 
 let line = null
 const outgoingPending = outgoing.pending
@@ -38,9 +40,9 @@ const initializeLine = (bp, config) => {
 
 const parser = bodyParser.json({
 	verify: function (req, res, buf, encoding) {
-		req.rawBody = buf.toString(encoding);
+		req.rawBody = buf.toString(encoding)
 	}
-});
+})
 
 module.exports = {
 
@@ -66,6 +68,27 @@ module.exports = {
     })
 
     bp.line = {}
+    _.forIn(actions, (action, name) => {
+      bp.line[name] = action
+
+      var sendName = name.replace(/^create/, 'send')
+      bp.line[sendName] = Promise.method(function() {
+        var msg = action.apply(this, arguments)
+        msg.__id = new Date().toISOString() + Math.random()
+        const resolver = { event: msg }
+        
+        const promise = new Promise(function(resolve, reject) {
+          resolver.resolve = resolve
+          resolver.reject = reject
+        })
+        
+        outgoingPending[msg.__id] = resolver
+        
+        bp.middlewares.sendOutgoing(msg)
+        return promise
+      })
+    })
+
   },
 
   ready: async function(bp, configurator) {
